@@ -14,8 +14,8 @@
     "scripts": {
         "build": "rollup -c",
         "dev": "rollup -c -w",
-        "test": "jest",
-        "test:watch": "jest --watch",
+        "test": "jest --config jest.config.cjs",
+        "test:watch": "jest --config jest.config.cjs --watch",
         "lint": "eslint src --ext .ts",
         "lint:fix": "eslint src --ext .ts --fix",
         "format": "prettier --write src/**/*.ts",
