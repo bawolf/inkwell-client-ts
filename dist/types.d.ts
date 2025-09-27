@@ -902,6 +902,74 @@ export type InkwellNearestRequest = z.infer<typeof InkwellNearestRequestSchema>;
 export type InkwellNearestFromEntityTransformRequest = z.infer<typeof InkwellNearestFromEntityTransformRequestSchema>;
 export type InkwellEntitiesByIdsRequest = z.infer<typeof InkwellEntitiesByIdsRequestSchema>;
 /**
+ * Nearest matches payload (alternative response shape for /embedding/nearest)
+ */
+export declare const InkwellNearestMatchSchema: z.ZodObject<{
+    /** Entity ID for the matched item */
+    entityId: z.ZodString;
+    /** Vector distance between query and entity */
+    distance: z.ZodNumber;
+    /** Optional embedding vector for the match if provided by the server */
+    embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
+}, "strip", z.ZodTypeAny, {
+    entityId: string;
+    distance: number;
+    embedding?: number[] | undefined;
+}, {
+    entityId: string;
+    distance: number;
+    embedding?: number[] | undefined;
+}>;
+export declare const InkwellNearestMatchesPayloadSchema: z.ZodObject<{
+    /** Optional model used for the search */
+    model: z.ZodOptional<z.ZodString>;
+    /** Requested top K */
+    top: z.ZodOptional<z.ZodNumber>;
+    /** Echoed filters from the request */
+    filters: z.ZodOptional<z.ZodArray<z.ZodEnum<["character", "item", "scenery", "tile", "effect", "scene"]>, "many">>;
+    /** Whether metadata filters were applied server-side */
+    metadataApplied: z.ZodOptional<z.ZodBoolean>;
+    /** Array of nearest match references */
+    matches: z.ZodArray<z.ZodObject<{
+        /** Entity ID for the matched item */
+        entityId: z.ZodString;
+        /** Vector distance between query and entity */
+        distance: z.ZodNumber;
+        /** Optional embedding vector for the match if provided by the server */
+        embedding: z.ZodOptional<z.ZodArray<z.ZodNumber, "many">>;
+    }, "strip", z.ZodTypeAny, {
+        entityId: string;
+        distance: number;
+        embedding?: number[] | undefined;
+    }, {
+        entityId: string;
+        distance: number;
+        embedding?: number[] | undefined;
+    }>, "many">;
+}, "strip", z.ZodTypeAny, {
+    matches: {
+        entityId: string;
+        distance: number;
+        embedding?: number[] | undefined;
+    }[];
+    top?: number | undefined;
+    model?: string | undefined;
+    filters?: ("character" | "item" | "scenery" | "tile" | "effect" | "scene")[] | undefined;
+    metadataApplied?: boolean | undefined;
+}, {
+    matches: {
+        entityId: string;
+        distance: number;
+        embedding?: number[] | undefined;
+    }[];
+    top?: number | undefined;
+    model?: string | undefined;
+    filters?: ("character" | "item" | "scenery" | "tile" | "effect" | "scene")[] | undefined;
+    metadataApplied?: boolean | undefined;
+}>;
+export type InkwellNearestMatch = z.infer<typeof InkwellNearestMatchSchema>;
+export type InkwellNearestMatchesPayload = z.infer<typeof InkwellNearestMatchesPayloadSchema>;
+/**
  * Type guard functions
  */
 export declare function isCharacter(e: InkwellEntity): e is InkwellCharacterEntity;

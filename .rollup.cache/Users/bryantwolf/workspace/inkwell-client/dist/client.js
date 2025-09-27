@@ -1,12 +1,10 @@
 import axios from 'axios';
 import { z } from 'zod';
-import pRetry from 'p-retry';
 import debug from 'debug';
-import { InkwellEntitySchema, } from './types';
+import { InkwellEntitySchema, InkwellNearestMatchesPayloadSchema, } from './types';
 const log = debug('inkwell:client');
 const DEFAULT_BASE_URL = 'https://api.inkwell.ing/v1';
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
-const DEFAULT_RETRY_ATTEMPTS = 3;
 /**
  * Custom error class for Inkwell API errors
  */
@@ -22,6 +20,8 @@ export class InkwellError extends Error {
 /**
  * Official Inkwell API client for JavaScript/TypeScript
  *
+ * Rate Limits: 120 requests per minute, 10,000 requests per day per API key
+ *
  * @example
  * ```typescript
  * import { createInkwellClient } from '@inkwell/client';
@@ -35,71 +35,62 @@ export class InkwellError extends Error {
  */
 export class InkwellClient {
     constructor(options = {}) {
-        this.retryAttempts = options.retryAttempts ?? DEFAULT_RETRY_ATTEMPTS;
         // Create axios instance
-        this.axiosInstance = options.axiosInstance ?? axios.create({
-            baseURL: options.baseUrl ?? DEFAULT_BASE_URL,
-            timeout: options.timeout ?? DEFAULT_TIMEOUT,
-            headers: {
-                'Content-Type': 'application/json',
-                ...(options.apiKey && { 'x-api-key': options.apiKey }),
-            },
-        });
+        this.axiosInstance =
+            options.axiosInstance ??
+                axios.create({
+                    baseURL: options.baseUrl ?? DEFAULT_BASE_URL,
+                    timeout: options.timeout ?? DEFAULT_TIMEOUT,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(options.apiKey && { 'x-api-key': options.apiKey }),
+                    },
+                });
         // Add request/response interceptors
         this.setupInterceptors();
         log('InkwellClient initialized with baseURL:', this.axiosInstance.defaults.baseURL);
     }
     setupInterceptors() {
         // Request interceptor
-        this.axiosInstance.interceptors.request.use((config) => {
+        this.axiosInstance.interceptors.request.use(config => {
             log('Making request:', config.method?.toUpperCase(), config.url);
             return config;
-        }, (error) => {
+        }, error => {
             log('Request error:', error);
             return Promise.reject(error);
         });
         // Response interceptor
-        this.axiosInstance.interceptors.response.use((response) => {
+        this.axiosInstance.interceptors.response.use(response => {
             log('Response received:', response.status, response.config.url);
             return response;
-        }, (error) => {
+        }, error => {
             log('Response error:', error.response?.status, error.message);
             return Promise.reject(error);
         });
     }
     async makeRequest(config, schema) {
-        return pRetry(async () => {
-            try {
-                const response = await this.axiosInstance.request(config);
-                // Handle Inkwell API response format
-                let data = response.data;
-                if (data && typeof data === 'object' && 'ok' in data && 'data' in data) {
-                    data = data.data;
-                }
-                // Validate response with schema if provided
-                if (schema) {
-                    return schema.parse(data);
-                }
-                return data;
+        try {
+            const response = await this.axiosInstance.request(config);
+            // Handle Inkwell API response format
+            let data = response.data;
+            if (data && typeof data === 'object' && 'ok' in data && 'data' in data) {
+                data = data.data;
             }
-            catch (error) {
-                if (axios.isAxiosError(error)) {
-                    const status = error.response?.status;
-                    const statusText = error.response?.statusText;
-                    const responseData = error.response?.data;
-                    throw new InkwellError(`Inkwell API request failed: ${status} ${statusText}`, status, statusText, responseData);
-                }
-                throw error;
+            // Validate response with schema if provided
+            if (schema) {
+                return schema.parse(data);
             }
-        }, {
-            retries: this.retryAttempts,
-            factor: 2,
-            minTimeout: 1000,
-            maxTimeout: 10000,
-            onFailedAttempt: (error) => {
-                log(`Attempt ${error.attemptNumber} failed:`, error.message);
-            },
-        });
+            return data;
+        }
+        catch (error) {
+            if (axios.isAxiosError(error)) {
+                const status = error.response?.status;
+                const statusText = error.response?.statusText;
+                const responseData = error.response?.data;
+                throw new InkwellError(`Inkwell API request failed: ${status} ${statusText}`, status, statusText, responseData);
+            }
+            throw error;
+        }
     }
     /**
      * Get a specific entity by ID
@@ -134,7 +125,19 @@ export class InkwellClient {
      * ```
      */
     getRandomEntity(types) {
-        const params = types && types.length ? { types: types.join(',') } : {};
+        // Only tile, item, and character need to be pluralized
+        // scenery, effect, and scene are the same in singular/plural
+        const typeMapping = {
+            character: 'characters',
+            item: 'items',
+            scenery: 'scenery', // same in singular/plural
+            tile: 'tiles',
+            effect: 'effects',
+            scene: 'scenes',
+        };
+        const params = types && types.length
+            ? { types: types.map(type => typeMapping[type]).join(',') }
+            : {};
         return this.makeRequest({
             method: 'GET',
             url: '/entity/random',
@@ -165,27 +168,31 @@ export class InkwellClient {
         }, EmbeddingResponseSchema);
     }
     /**
-     * Find nearest entities by embedding vector
+     * Find nearest matches by embedding vector (faithful to API)
      *
      * @param req - The nearest request parameters
-     * @returns Promise resolving to array of nearest entities
+     * @returns Promise resolving to the matches payload (with distances)
      * @throws {InkwellError} When the request fails
-     *
-     * @example
-     * ```typescript
-     * const nearest = await client.nearestByEmbedding({
-     *   embedding: [0.1, 0.2, 0.3],
-     *   types: ['character'],
-     *   top: 5
-     * });
-     * ```
      */
     nearestByEmbedding(req) {
         return this.makeRequest({
             method: 'POST',
             url: '/embedding/nearest',
             data: req,
-        }, z.array(InkwellEntitySchema));
+        }, InkwellNearestMatchesPayloadSchema);
+    }
+    /**
+     * Convenience: resolve nearest matches to full entities
+     */
+    async nearestByEmbeddingEntities(req) {
+        const payload = await this.nearestByEmbedding(req);
+        const ids = (payload.matches || [])
+            .map(m => m?.entityId)
+            .filter(Boolean);
+        if (ids.length === 0)
+            return [];
+        const entities = await this.entitiesByIds({ ids });
+        return entities ?? [];
     }
     /**
      * Find nearest entities from entity transform
@@ -225,12 +232,12 @@ export class InkwellClient {
      * ```
      */
     async entitiesByIds(req) {
-        const response = await this.makeRequest({
+        // The API returns a direct array of entities, not wrapped in an object
+        return this.makeRequest({
             method: 'POST',
             url: '/entities/by-ids',
             data: req,
-        }, z.object({ items: z.array(InkwellEntitySchema) }));
-        return response.items;
+        }, z.array(InkwellEntitySchema));
     }
 }
 /**

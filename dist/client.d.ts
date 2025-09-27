@@ -1,5 +1,5 @@
 import { AxiosInstance } from 'axios';
-import type { InkwellEntity, InkwellEntityType, InkwellNearestFromEntityTransformRequest, InkwellNearestRequest, InkwellEntitiesByIdsRequest } from './types';
+import type { InkwellEntity, InkwellEntityType, InkwellNearestFromEntityTransformRequest, InkwellNearestRequest, InkwellEntitiesByIdsRequest, InkwellNearestMatchesPayload } from './types';
 /**
  * Configuration options for the InkwellClient
  */
@@ -10,8 +10,6 @@ export interface InkwellClientOptions {
     baseUrl?: string;
     /** Request timeout in milliseconds */
     timeout?: number;
-    /** Number of retry attempts for failed requests */
-    retryAttempts?: number;
     /** Custom axios instance */
     axiosInstance?: AxiosInstance;
 }
@@ -27,6 +25,8 @@ export declare class InkwellError extends Error {
 /**
  * Official Inkwell API client for JavaScript/TypeScript
  *
+ * Rate Limits: 120 requests per minute, 10,000 requests per day per API key
+ *
  * @example
  * ```typescript
  * import { createInkwellClient } from '@inkwell/client';
@@ -40,7 +40,6 @@ export declare class InkwellError extends Error {
  */
 export declare class InkwellClient {
     private readonly axiosInstance;
-    private readonly retryAttempts;
     constructor(options?: InkwellClientOptions);
     private setupInterceptors;
     private makeRequest;
@@ -90,22 +89,17 @@ export declare class InkwellClient {
         entityId: string;
     }>;
     /**
-     * Find nearest entities by embedding vector
+     * Find nearest matches by embedding vector (faithful to API)
      *
      * @param req - The nearest request parameters
-     * @returns Promise resolving to array of nearest entities
+     * @returns Promise resolving to the matches payload (with distances)
      * @throws {InkwellError} When the request fails
-     *
-     * @example
-     * ```typescript
-     * const nearest = await client.nearestByEmbedding({
-     *   embedding: [0.1, 0.2, 0.3],
-     *   types: ['character'],
-     *   top: 5
-     * });
-     * ```
      */
-    nearestByEmbedding(req: InkwellNearestRequest): Promise<InkwellEntity[]>;
+    nearestByEmbedding(req: InkwellNearestRequest): Promise<InkwellNearestMatchesPayload>;
+    /**
+     * Convenience: resolve nearest matches to full entities
+     */
+    nearestByEmbeddingEntities(req: InkwellNearestRequest): Promise<InkwellEntity[]>;
     /**
      * Find nearest entities from entity transform
      *

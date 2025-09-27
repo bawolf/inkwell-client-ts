@@ -2,7 +2,6 @@
 
 var zod = require('zod');
 var axios = require('axios');
-var pRetry = require('p-retry');
 var debug = require('debug');
 
 /**
@@ -81,14 +80,22 @@ const InkwellSceneryEntitySchema = InkwellBaseEntitySchema.extend({
     /** URL to world depth map (color) */
     worldDepthColorUrl: zod.z.string().optional(),
     /** Additional metadata about the scenery */
-    metadata: zod.z.object({
-        scenery: zod.z.object({
+    metadata: zod.z
+        .object({
+        scenery: zod.z
+            .object({
             /** Width of the scenery asset */
             width: zod.z.literal(64).or(zod.z.literal(128)).or(zod.z.literal(256)).optional(),
             /** Height of the scenery asset */
-            height: zod.z.literal(64).or(zod.z.literal(128)).or(zod.z.literal(256)).optional(),
-        }).optional(),
-    }).optional(),
+            height: zod.z
+                .literal(64)
+                .or(zod.z.literal(128))
+                .or(zod.z.literal(256))
+                .optional(),
+        })
+            .optional(),
+    })
+        .optional(),
 });
 /**
  * Item entity schema
@@ -181,14 +188,22 @@ const InkwellNearestRequestSchema = zod.z.object({
     /** Number of results to return (default: 1) */
     top: zod.z.number().optional(),
     /** Optional metadata filters */
-    metadata: zod.z.object({
-        scenery: zod.z.object({
+    metadata: zod.z
+        .object({
+        scenery: zod.z
+            .object({
             /** Filter by scenery width */
             width: zod.z.literal(64).or(zod.z.literal(128)).or(zod.z.literal(256)).optional(),
             /** Filter by scenery height */
-            height: zod.z.literal(64).or(zod.z.literal(128)).or(zod.z.literal(256)).optional(),
-        }).optional(),
-    }).optional(),
+            height: zod.z
+                .literal(64)
+                .or(zod.z.literal(128))
+                .or(zod.z.literal(256))
+                .optional(),
+        })
+            .optional(),
+    })
+        .optional(),
 });
 /**
  * Nearest from entity transform request schema
@@ -207,6 +222,29 @@ const InkwellNearestFromEntityTransformRequestSchema = zod.z.object({
 const InkwellEntitiesByIdsRequestSchema = zod.z.object({
     /** Array of entity IDs to fetch */
     ids: zod.z.array(zod.z.string()),
+});
+/**
+ * Nearest matches payload (alternative response shape for /embedding/nearest)
+ */
+const InkwellNearestMatchSchema = zod.z.object({
+    /** Entity ID for the matched item */
+    entityId: zod.z.string(),
+    /** Vector distance between query and entity */
+    distance: zod.z.number(),
+    /** Optional embedding vector for the match if provided by the server */
+    embedding: zod.z.array(zod.z.number()).optional(),
+});
+const InkwellNearestMatchesPayloadSchema = zod.z.object({
+    /** Optional model used for the search */
+    model: zod.z.string().optional(),
+    /** Requested top K */
+    top: zod.z.number().optional(),
+    /** Echoed filters from the request */
+    filters: zod.z.array(zod.z.enum(INKWELL_ENTITY_TYPES)).optional(),
+    /** Whether metadata filters were applied server-side */
+    metadataApplied: zod.z.boolean().optional(),
+    /** Array of nearest match references */
+    matches: zod.z.array(InkwellNearestMatchSchema),
 });
 /**
  * Type guard functions
@@ -233,7 +271,6 @@ function isScene(e) {
 const log = debug('inkwell:client');
 const DEFAULT_BASE_URL = 'https://api.inkwell.ing/v1';
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
-const DEFAULT_RETRY_ATTEMPTS = 3;
 /**
  * Custom error class for Inkwell API errors
  */
@@ -249,6 +286,8 @@ class InkwellError extends Error {
 /**
  * Official Inkwell API client for JavaScript/TypeScript
  *
+ * Rate Limits: 120 requests per minute, 10,000 requests per day per API key
+ *
  * @example
  * ```typescript
  * import { createInkwellClient } from '@inkwell/client';
@@ -262,71 +301,62 @@ class InkwellError extends Error {
  */
 class InkwellClient {
     constructor(options = {}) {
-        this.retryAttempts = options.retryAttempts ?? DEFAULT_RETRY_ATTEMPTS;
         // Create axios instance
-        this.axiosInstance = options.axiosInstance ?? axios.create({
-            baseURL: options.baseUrl ?? DEFAULT_BASE_URL,
-            timeout: options.timeout ?? DEFAULT_TIMEOUT,
-            headers: {
-                'Content-Type': 'application/json',
-                ...(options.apiKey && { 'x-api-key': options.apiKey }),
-            },
-        });
+        this.axiosInstance =
+            options.axiosInstance ??
+                axios.create({
+                    baseURL: options.baseUrl ?? DEFAULT_BASE_URL,
+                    timeout: options.timeout ?? DEFAULT_TIMEOUT,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(options.apiKey && { 'x-api-key': options.apiKey }),
+                    },
+                });
         // Add request/response interceptors
         this.setupInterceptors();
         log('InkwellClient initialized with baseURL:', this.axiosInstance.defaults.baseURL);
     }
     setupInterceptors() {
         // Request interceptor
-        this.axiosInstance.interceptors.request.use((config) => {
+        this.axiosInstance.interceptors.request.use(config => {
             log('Making request:', config.method?.toUpperCase(), config.url);
             return config;
-        }, (error) => {
+        }, error => {
             log('Request error:', error);
             return Promise.reject(error);
         });
         // Response interceptor
-        this.axiosInstance.interceptors.response.use((response) => {
+        this.axiosInstance.interceptors.response.use(response => {
             log('Response received:', response.status, response.config.url);
             return response;
-        }, (error) => {
+        }, error => {
             log('Response error:', error.response?.status, error.message);
             return Promise.reject(error);
         });
     }
     async makeRequest(config, schema) {
-        return pRetry(async () => {
-            try {
-                const response = await this.axiosInstance.request(config);
-                // Handle Inkwell API response format
-                let data = response.data;
-                if (data && typeof data === 'object' && 'ok' in data && 'data' in data) {
-                    data = data.data;
-                }
-                // Validate response with schema if provided
-                if (schema) {
-                    return schema.parse(data);
-                }
-                return data;
+        try {
+            const response = await this.axiosInstance.request(config);
+            // Handle Inkwell API response format
+            let data = response.data;
+            if (data && typeof data === 'object' && 'ok' in data && 'data' in data) {
+                data = data.data;
             }
-            catch (error) {
-                if (axios.isAxiosError(error)) {
-                    const status = error.response?.status;
-                    const statusText = error.response?.statusText;
-                    const responseData = error.response?.data;
-                    throw new InkwellError(`Inkwell API request failed: ${status} ${statusText}`, status, statusText, responseData);
-                }
-                throw error;
+            // Validate response with schema if provided
+            if (schema) {
+                return schema.parse(data);
             }
-        }, {
-            retries: this.retryAttempts,
-            factor: 2,
-            minTimeout: 1000,
-            maxTimeout: 10000,
-            onFailedAttempt: (error) => {
-                log(`Attempt ${error.attemptNumber} failed:`, error.message);
-            },
-        });
+            return data;
+        }
+        catch (error) {
+            if (axios.isAxiosError(error)) {
+                const status = error.response?.status;
+                const statusText = error.response?.statusText;
+                const responseData = error.response?.data;
+                throw new InkwellError(`Inkwell API request failed: ${status} ${statusText}`, status, statusText, responseData);
+            }
+            throw error;
+        }
     }
     /**
      * Get a specific entity by ID
@@ -361,7 +391,19 @@ class InkwellClient {
      * ```
      */
     getRandomEntity(types) {
-        const params = types && types.length ? { types: types.join(',') } : {};
+        // Only tile, item, and character need to be pluralized
+        // scenery, effect, and scene are the same in singular/plural
+        const typeMapping = {
+            character: 'characters',
+            item: 'items',
+            scenery: 'scenery', // same in singular/plural
+            tile: 'tiles',
+            effect: 'effects',
+            scene: 'scenes',
+        };
+        const params = types && types.length
+            ? { types: types.map(type => typeMapping[type]).join(',') }
+            : {};
         return this.makeRequest({
             method: 'GET',
             url: '/entity/random',
@@ -392,27 +434,31 @@ class InkwellClient {
         }, EmbeddingResponseSchema);
     }
     /**
-     * Find nearest entities by embedding vector
+     * Find nearest matches by embedding vector (faithful to API)
      *
      * @param req - The nearest request parameters
-     * @returns Promise resolving to array of nearest entities
+     * @returns Promise resolving to the matches payload (with distances)
      * @throws {InkwellError} When the request fails
-     *
-     * @example
-     * ```typescript
-     * const nearest = await client.nearestByEmbedding({
-     *   embedding: [0.1, 0.2, 0.3],
-     *   types: ['character'],
-     *   top: 5
-     * });
-     * ```
      */
     nearestByEmbedding(req) {
         return this.makeRequest({
             method: 'POST',
             url: '/embedding/nearest',
             data: req,
-        }, zod.z.array(InkwellEntitySchema));
+        }, InkwellNearestMatchesPayloadSchema);
+    }
+    /**
+     * Convenience: resolve nearest matches to full entities
+     */
+    async nearestByEmbeddingEntities(req) {
+        const payload = await this.nearestByEmbedding(req);
+        const ids = (payload.matches || [])
+            .map(m => m?.entityId)
+            .filter(Boolean);
+        if (ids.length === 0)
+            return [];
+        const entities = await this.entitiesByIds({ ids });
+        return entities ?? [];
     }
     /**
      * Find nearest entities from entity transform
@@ -452,12 +498,12 @@ class InkwellClient {
      * ```
      */
     async entitiesByIds(req) {
-        const response = await this.makeRequest({
+        // The API returns a direct array of entities, not wrapped in an object
+        return this.makeRequest({
             method: 'POST',
             url: '/entities/by-ids',
             data: req,
-        }, zod.z.object({ items: zod.z.array(InkwellEntitySchema) }));
-        return response.items;
+        }, zod.z.array(InkwellEntitySchema));
     }
 }
 /**
@@ -491,6 +537,8 @@ exports.InkwellEntitySchema = InkwellEntitySchema;
 exports.InkwellError = InkwellError;
 exports.InkwellItemEntitySchema = InkwellItemEntitySchema;
 exports.InkwellNearestFromEntityTransformRequestSchema = InkwellNearestFromEntityTransformRequestSchema;
+exports.InkwellNearestMatchSchema = InkwellNearestMatchSchema;
+exports.InkwellNearestMatchesPayloadSchema = InkwellNearestMatchesPayloadSchema;
 exports.InkwellNearestRequestSchema = InkwellNearestRequestSchema;
 exports.InkwellSceneEntitySchema = InkwellSceneEntitySchema;
 exports.InkwellSceneryEntitySchema = InkwellSceneryEntitySchema;

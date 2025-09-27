@@ -1,6 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { z } from 'zod';
-import pRetry from 'p-retry';
 import debug from 'debug';
 import type {
   InkwellEntity,
@@ -8,20 +7,17 @@ import type {
   InkwellNearestFromEntityTransformRequest,
   InkwellNearestRequest,
   InkwellEntitiesByIdsRequest,
+  InkwellNearestMatchesPayload,
 } from './types';
 import {
   InkwellEntitySchema,
-  InkwellEmbeddingResponseSchema,
-  InkwellNearestRequestSchema,
-  InkwellNearestFromEntityTransformRequestSchema,
-  InkwellEntitiesByIdsRequestSchema,
+  InkwellNearestMatchesPayloadSchema,
 } from './types';
 
 const log = debug('inkwell:client');
 
 const DEFAULT_BASE_URL = 'https://api.inkwell.ing/v1';
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
-const DEFAULT_RETRY_ATTEMPTS = 3;
 
 /**
  * Configuration options for the InkwellClient
@@ -33,8 +29,6 @@ export interface InkwellClientOptions {
   baseUrl?: string;
   /** Request timeout in milliseconds */
   timeout?: number;
-  /** Number of retry attempts for failed requests */
-  retryAttempts?: number;
   /** Custom axios instance */
   axiosInstance?: AxiosInstance;
 }
@@ -63,7 +57,7 @@ export class InkwellError extends Error {
 
 /**
  * Official Inkwell API client for JavaScript/TypeScript
- * 
+ *
  * Rate Limits: 120 requests per minute, 10,000 requests per day per API key
  *
  * @example
@@ -79,11 +73,8 @@ export class InkwellError extends Error {
  */
 export class InkwellClient {
   private readonly axiosInstance: AxiosInstance;
-  private readonly retryAttempts: number;
 
   constructor(options: InkwellClientOptions = {}) {
-    this.retryAttempts = options.retryAttempts ?? DEFAULT_RETRY_ATTEMPTS;
-
     // Create axios instance
     this.axiosInstance =
       options.axiosInstance ??
@@ -135,55 +126,36 @@ export class InkwellClient {
     config: AxiosRequestConfig,
     schema?: z.ZodType<T>
   ): Promise<T> {
-    return pRetry(
-      async () => {
-        try {
-          const response: AxiosResponse =
-            await this.axiosInstance.request(config);
+    try {
+      const response: AxiosResponse = await this.axiosInstance.request(config);
 
-          // Handle Inkwell API response format
-          let data = response.data;
-          if (
-            data &&
-            typeof data === 'object' &&
-            'ok' in data &&
-            'data' in data
-          ) {
-            data = data.data;
-          }
-
-          // Validate response with schema if provided
-          if (schema) {
-            return schema.parse(data);
-          }
-
-          return data;
-        } catch (error) {
-          if (axios.isAxiosError(error)) {
-            const status = error.response?.status;
-            const statusText = error.response?.statusText;
-            const responseData = error.response?.data;
-
-            throw new InkwellError(
-              `Inkwell API request failed: ${status} ${statusText}`,
-              status,
-              statusText,
-              responseData
-            );
-          }
-          throw error;
-        }
-      },
-      {
-        retries: this.retryAttempts,
-        factor: 2,
-        minTimeout: 1000,
-        maxTimeout: 10000,
-        onFailedAttempt: error => {
-          log(`Attempt ${error.attemptNumber} failed:`, error.message);
-        },
+      // Handle Inkwell API response format
+      let data = response.data;
+      if (data && typeof data === 'object' && 'ok' in data && 'data' in data) {
+        data = data.data;
       }
-    );
+
+      // Validate response with schema if provided
+      if (schema) {
+        return schema.parse(data);
+      }
+
+      return data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const statusText = error.response?.statusText;
+        const responseData = error.response?.data;
+
+        throw new InkwellError(
+          `Inkwell API request failed: ${status} ${statusText}`,
+          status,
+          statusText,
+          responseData
+        );
+      }
+      throw error;
+    }
   }
 
   /**
@@ -223,19 +195,21 @@ export class InkwellClient {
    * ```
    */
   getRandomEntity(types?: InkwellEntityType[]): Promise<InkwellEntity> {
-    // Convert entity types to plural forms as expected by the API
+    // Only tile, item, and character need to be pluralized
+    // scenery, effect, and scene are the same in singular/plural
     const typeMapping: Record<InkwellEntityType, string> = {
       character: 'characters',
       item: 'items',
-      scenery: 'scenery',
+      scenery: 'scenery', // same in singular/plural
       tile: 'tiles',
       effect: 'effects',
       scene: 'scenes',
     };
-    
-    const params = types && types.length 
-      ? { types: types.map(type => typeMapping[type]).join(',') } 
-      : {};
+
+    const params =
+      types && types.length
+        ? { types: types.map(type => typeMapping[type]).join(',') }
+        : {};
 
     return this.makeRequest(
       {
@@ -278,30 +252,38 @@ export class InkwellClient {
   }
 
   /**
-   * Find nearest entities by embedding vector
+   * Find nearest matches by embedding vector (faithful to API)
    *
    * @param req - The nearest request parameters
-   * @returns Promise resolving to array of nearest entities
+   * @returns Promise resolving to the matches payload (with distances)
    * @throws {InkwellError} When the request fails
-   *
-   * @example
-   * ```typescript
-   * const nearest = await client.nearestByEmbedding({
-   *   embedding: [0.1, 0.2, 0.3],
-   *   types: ['character'],
-   *   top: 5
-   * });
-   * ```
    */
-  nearestByEmbedding(req: InkwellNearestRequest): Promise<InkwellEntity[]> {
+  nearestByEmbedding(
+    req: InkwellNearestRequest
+  ): Promise<InkwellNearestMatchesPayload> {
     return this.makeRequest(
       {
         method: 'POST',
         url: '/embedding/nearest',
         data: req,
       },
-      z.array(InkwellEntitySchema)
+      InkwellNearestMatchesPayloadSchema
     );
+  }
+
+  /**
+   * Convenience: resolve nearest matches to full entities
+   */
+  async nearestByEmbeddingEntities(
+    req: InkwellNearestRequest
+  ): Promise<InkwellEntity[]> {
+    const payload = await this.nearestByEmbedding(req);
+    const ids = (payload.matches || [])
+      .map(m => m?.entityId)
+      .filter(Boolean) as string[];
+    if (ids.length === 0) return [];
+    const entities = await this.entitiesByIds({ ids });
+    return entities ?? [];
   }
 
   /**

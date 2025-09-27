@@ -261,6 +261,36 @@ export type InkwellEntitiesByIdsRequest = z.infer<
 >;
 
 /**
+ * Nearest matches payload (alternative response shape for /embedding/nearest)
+ */
+export const InkwellNearestMatchSchema = z.object({
+  /** Entity ID for the matched item */
+  entityId: z.string(),
+  /** Vector distance between query and entity */
+  distance: z.number(),
+  /** Optional embedding vector for the match if provided by the server */
+  embedding: z.array(z.number()).optional(),
+});
+
+export const InkwellNearestMatchesPayloadSchema = z.object({
+  /** Optional model used for the search */
+  model: z.string().optional(),
+  /** Requested top K */
+  top: z.number().optional(),
+  /** Echoed filters from the request */
+  filters: z.array(z.enum(INKWELL_ENTITY_TYPES)).optional(),
+  /** Whether metadata filters were applied server-side */
+  metadataApplied: z.boolean().optional(),
+  /** Array of nearest match references */
+  matches: z.array(InkwellNearestMatchSchema),
+});
+
+export type InkwellNearestMatch = z.infer<typeof InkwellNearestMatchSchema>;
+export type InkwellNearestMatchesPayload = z.infer<
+  typeof InkwellNearestMatchesPayloadSchema
+>;
+
+/**
  * Type guard functions
  */
 export function isCharacter(e: InkwellEntity): e is InkwellCharacterEntity {

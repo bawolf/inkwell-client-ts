@@ -1,11 +1,10 @@
 # @inkwell/client
 
-Official Inkwell API client for JavaScript/TypeScript applications. This client provides a robust, type-safe interface to the Inkwell API with built-in retry logic, request/response validation, and comprehensive error handling.
+Official Inkwell API client for JavaScript/TypeScript applications. This client provides a robust, type-safe interface to the Inkwell API with runtime validation and comprehensive error handling.
 
 ## Features
 
 - 🚀 **Type-safe**: Full TypeScript support with runtime validation using Zod
-- 🔄 **Retry Logic**: Automatic retry with exponential backoff for failed requests
 - 🛡️ **Error Handling**: Comprehensive error handling with custom error types
 - 📝 **Logging**: Built-in debug logging for development and troubleshooting
 - 🔧 **Configurable**: Flexible configuration options for different environments
@@ -24,7 +23,7 @@ npm install @inkwell/client
 import { createInkwellClient } from '@inkwell/client';
 
 const client = createInkwellClient({
-  apiKey: 'your-api-key-here'
+  apiKey: 'your-api-key-here',
 });
 
 // Get a specific entity
@@ -34,11 +33,17 @@ console.log(entity.type); // 'character', 'item', etc.
 // Get a random character
 const randomCharacter = await client.getRandomEntity(['character']);
 
-// Find similar entities
-const similar = await client.nearestByEmbedding({
+// Find nearest matches (distances + entityIds, faithful to API)
+const matches = await client.nearestByEmbedding({
   embedding: [0.1, 0.2, 0.3],
   types: ['character'],
-  top: 5
+  top: 5,
+});
+// Or resolve to full entities via convenience method
+const entities = await client.nearestByEmbeddingEntities({
+  embedding: [0.1, 0.2, 0.3],
+  types: ['character'],
+  top: 5,
 });
 ```
 
@@ -48,11 +53,10 @@ const similar = await client.nearestByEmbedding({
 import { createInkwellClient } from '@inkwell/client';
 
 const client = createInkwellClient({
-  apiKey: 'your-api-key',           // Required for authenticated requests
+  apiKey: 'your-api-key', // Required for authenticated requests
   baseUrl: 'https://api.inkwell.ing/v1', // Optional: custom API endpoint
-  timeout: 30000,                   // Optional: request timeout (default: 30s)
-  retryAttempts: 3,                 // Optional: retry attempts (default: 3)
-  axiosInstance: customAxios        // Optional: custom axios instance
+  timeout: 30000, // Optional: request timeout (default: 30s)
+  axiosInstance: customAxios, // Optional: custom axios instance
 });
 ```
 
@@ -92,25 +96,39 @@ const itemOrEffect = await client.getRandomEntity(['item', 'effect']);
 Get the embedding vector for a specific entity.
 
 ```typescript
-const { embedding, entityId } = await client.getEmbeddingByEntityId('entity-123');
+const { embedding, entityId } =
+  await client.getEmbeddingByEntityId('entity-123');
 console.log(`Entity ${entityId} has ${embedding.length} dimensions`);
 ```
 
-#### `nearestByEmbedding(req: InkwellNearestRequest): Promise<InkwellEntity[]>`
+#### `nearestByEmbedding(req: InkwellNearestRequest): Promise<InkwellNearestMatchesPayload>`
 
-Find entities similar to a given embedding vector.
+Find nearest matches to a given embedding vector. Returns distances and `entityId` references (API-faithful response).
 
 ```typescript
-const similar = await client.nearestByEmbedding({
-  embedding: [0.1, 0.2, 0.3, /* ... */],
+const matches = await client.nearestByEmbedding({
+  embedding: [0.1, 0.2, 0.3 /* ... */],
   types: ['character'],
   top: 5,
   metadata: {
     scenery: {
       width: 128,
-      height: 128
-    }
-  }
+      height: 128,
+    },
+  },
+});
+console.log(matches.matches[0].distance);
+```
+
+#### `nearestByEmbeddingEntities(req: InkwellNearestRequest): Promise<InkwellEntity[]>`
+
+Convenience helper that resolves the match `entityId`s to full entities via `entitiesByIds`.
+
+```typescript
+const entities = await client.nearestByEmbeddingEntities({
+  embedding: [0.1, 0.2, 0.3],
+  types: ['character'],
+  top: 5,
 });
 ```
 
@@ -122,7 +140,7 @@ Find entities similar to a source entity but of a different type.
 const items = await client.nearestFromEntityTransform({
   entityId: 'character-123',
   targetType: 'item',
-  count: 3
+  top: 3,
 });
 ```
 
@@ -132,7 +150,7 @@ Get multiple entities by their IDs in a single request.
 
 ```typescript
 const entities = await client.entitiesByIds({
-  ids: ['entity-1', 'entity-2', 'entity-3']
+  ids: ['entity-1', 'entity-2', 'entity-3'],
 });
 ```
 
@@ -191,6 +209,43 @@ import debug from 'debug';
 debug.enabled('inkwell:client');
 ```
 
+## Smoke testing against the live API
+
+You can quickly verify your setup against the live API using the bundled smoke script.
+
+Prerequisites:
+
+- Set `INKWELL_API_KEY` (required)
+- Optional: `INKWELL_BASE_URL` to override the default endpoint
+- Optional: `INKWELL_ENTITY_ID` to fetch a specific entity by ID
+- Optional: filter random entity by type(s) using `INKWELL_TYPES` env var or `--types` CLI arg
+
+Commands:
+
+```bash
+# Random entity (no filter)
+INKWELL_API_KEY=your_key npm run smoke
+
+# Random entity filtered by types (comma-separated)
+INKWELL_API_KEY=your_key INKWELL_TYPES=character,tile npm run smoke
+
+# Or use a CLI argument for types
+INKWELL_API_KEY=your_key npm run smoke -- --types=character,tile
+
+# Specific entity by ID
+INKWELL_API_KEY=your_key INKWELL_ENTITY_ID=entity-123 npm run smoke
+
+# Custom base URL (if needed)
+INKWELL_API_KEY=your_key INKWELL_BASE_URL=https://api.inkwell.ing/v1 npm run smoke
+```
+
+What the smoke test does:
+
+- Builds the library
+- Creates an `InkwellClient` with your API key (and optional base URL)
+- If `INKWELL_ENTITY_ID` is set, fetches that entity; otherwise fetches a random entity
+- Fetches an embedding for the entity by ID, then fetches 3 nearest entities using `nearestByEmbeddingEntities`
+
 ## Advanced Usage
 
 ### Custom Axios Instance
@@ -204,13 +259,13 @@ import { createInkwellClient } from '@inkwell/client';
 const customAxios = axios.create({
   timeout: 10000,
   headers: {
-    'User-Agent': 'MyApp/1.0'
-  }
+    'User-Agent': 'MyApp/1.0',
+  },
 });
 
 const client = createInkwellClient({
   apiKey: 'your-key',
-  axiosInstance: customAxios
+  axiosInstance: customAxios,
 });
 ```
 
@@ -227,7 +282,7 @@ DEBUG=inkwell:client
 ```typescript
 const client = createInkwellClient({
   apiKey: process.env.INKWELL_API_KEY,
-  baseUrl: process.env.INKWELL_BASE_URL
+  baseUrl: process.env.INKWELL_BASE_URL,
 });
 ```
 

@@ -75,14 +75,22 @@ export const InkwellSceneryEntitySchema = InkwellBaseEntitySchema.extend({
     /** URL to world depth map (color) */
     worldDepthColorUrl: z.string().optional(),
     /** Additional metadata about the scenery */
-    metadata: z.object({
-        scenery: z.object({
+    metadata: z
+        .object({
+        scenery: z
+            .object({
             /** Width of the scenery asset */
             width: z.literal(64).or(z.literal(128)).or(z.literal(256)).optional(),
             /** Height of the scenery asset */
-            height: z.literal(64).or(z.literal(128)).or(z.literal(256)).optional(),
-        }).optional(),
-    }).optional(),
+            height: z
+                .literal(64)
+                .or(z.literal(128))
+                .or(z.literal(256))
+                .optional(),
+        })
+            .optional(),
+    })
+        .optional(),
 });
 /**
  * Item entity schema
@@ -175,14 +183,22 @@ export const InkwellNearestRequestSchema = z.object({
     /** Number of results to return (default: 1) */
     top: z.number().optional(),
     /** Optional metadata filters */
-    metadata: z.object({
-        scenery: z.object({
+    metadata: z
+        .object({
+        scenery: z
+            .object({
             /** Filter by scenery width */
             width: z.literal(64).or(z.literal(128)).or(z.literal(256)).optional(),
             /** Filter by scenery height */
-            height: z.literal(64).or(z.literal(128)).or(z.literal(256)).optional(),
-        }).optional(),
-    }).optional(),
+            height: z
+                .literal(64)
+                .or(z.literal(128))
+                .or(z.literal(256))
+                .optional(),
+        })
+            .optional(),
+    })
+        .optional(),
 });
 /**
  * Nearest from entity transform request schema
@@ -201,6 +217,29 @@ export const InkwellNearestFromEntityTransformRequestSchema = z.object({
 export const InkwellEntitiesByIdsRequestSchema = z.object({
     /** Array of entity IDs to fetch */
     ids: z.array(z.string()),
+});
+/**
+ * Nearest matches payload (alternative response shape for /embedding/nearest)
+ */
+export const InkwellNearestMatchSchema = z.object({
+    /** Entity ID for the matched item */
+    entityId: z.string(),
+    /** Vector distance between query and entity */
+    distance: z.number(),
+    /** Optional embedding vector for the match if provided by the server */
+    embedding: z.array(z.number()).optional(),
+});
+export const InkwellNearestMatchesPayloadSchema = z.object({
+    /** Optional model used for the search */
+    model: z.string().optional(),
+    /** Requested top K */
+    top: z.number().optional(),
+    /** Echoed filters from the request */
+    filters: z.array(z.enum(INKWELL_ENTITY_TYPES)).optional(),
+    /** Whether metadata filters were applied server-side */
+    metadataApplied: z.boolean().optional(),
+    /** Array of nearest match references */
+    matches: z.array(InkwellNearestMatchSchema),
 });
 /**
  * Type guard functions
