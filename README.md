@@ -332,6 +332,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 📖 [Documentation](https://docs.inkwell.ing)
-- 🐛 [Issue Tracker](https://github.com/inkwell/client/issues)
-- 💬 [Discord Community](https://discord.gg/inkwell)
+- 🐛 [Issue Tracker](https://github.com/bawolf/inkwell-client-ts/issues)
