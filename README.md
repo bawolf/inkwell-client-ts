@@ -1,4 +1,4 @@
-# inkwell-client
+# @bawolf/inkwell-client
 
 Official Inkwell API client for JavaScript/TypeScript applications. This client provides a robust, type-safe interface to the Inkwell API with runtime validation and comprehensive error handling.
 
@@ -14,13 +14,13 @@ Official Inkwell API client for JavaScript/TypeScript applications. This client 
 ## Installation
 
 ```bash
-npm install inkwell-client
+npm install @bawolf/inkwell-client
 ```
 
 ## Quick Start
 
 ```typescript
-import { createInkwellClient } from 'inkwell-client';
+import { createInkwellClient } from '@bawolf/inkwell-client';
 
 const client = createInkwellClient({
   apiKey: 'your-api-key-here',
@@ -50,7 +50,7 @@ const entities = await client.nearestByEmbeddingEntities({
 ## Configuration
 
 ```typescript
-import { createInkwellClient } from 'inkwell-client';
+import { createInkwellClient } from '@bawolf/inkwell-client';
 
 const client = createInkwellClient({
   apiKey: 'your-api-key', // Required for authenticated requests
@@ -159,7 +159,7 @@ const entities = await client.entitiesByIds({
 The client includes type guard functions to help with type narrowing:
 
 ```typescript
-import { isCharacter, isItem, isEffect } from 'inkwell-client';
+import { isCharacter, isItem, isEffect } from '@bawolf/inkwell-client';
 
 const entity = await client.getRandomEntity();
 
@@ -181,7 +181,7 @@ if (isCharacter(entity)) {
 The client throws `InkwellError` instances for API errors:
 
 ```typescript
-import { InkwellError } from 'inkwell-client';
+import { InkwellError } from '@bawolf/inkwell-client';
 
 try {
   const entity = await client.getEntity('invalid-id');
@@ -254,7 +254,7 @@ You can provide a custom Axios instance for advanced configuration:
 
 ```typescript
 import axios from 'axios';
-import { createInkwellClient } from 'inkwell-client';
+import { createInkwellClient } from '@bawolf/inkwell-client';
 
 const customAxios = axios.create({
   timeout: 10000,

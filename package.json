@@ -1,6 +1,6 @@
 {
-    "name": "inkwell-client",
-    "version": "1.0.2",
+    "name": "@bawolf/inkwell-client",
+    "version": "0.0.1",
     "description": "Official Inkwell API client for JavaScript/TypeScript",
     "type": "module",
     "main": "dist/index.js",
