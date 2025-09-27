@@ -1,5 +1,7 @@
+import { z } from 'zod';
+
 /**
- * Inkwell public API types based on shared docs and samples
+ * Zod schemas for runtime validation
  */
 
 /**
@@ -15,261 +17,272 @@ export const INKWELL_ENTITY_TYPES = [
 ] as const;
 
 /**
- * Type representing all possible Inkwell entity types
+ * Author information schema
  */
-export type InkwellEntityType = (typeof INKWELL_ENTITY_TYPES)[number];
-
-/**
- * Author information for Inkwell entities
- */
-export interface InkwellAuthor {
+export const InkwellAuthorSchema = z.object({
   /** Unique author identifier */
-  id: string;
+  id: z.string(),
   /** Author's username */
-  username: string;
-}
+  username: z.string(),
+});
 
 /**
- * Base properties shared by all Inkwell entities
+ * Base entity schema shared by all Inkwell entities
  */
-export interface InkwellBaseEntity {
+export const InkwellBaseEntitySchema = z.object({
   /** Unique entity identifier */
-  entityId: string;
+  entityId: z.string(),
   /** Type of entity */
-  type: InkwellEntityType;
+  type: z.enum(INKWELL_ENTITY_TYPES),
   /** ISO timestamp when entity was created */
-  createdAt: string;
+  createdAt: z.string(),
   /** Author who created the entity */
-  author: InkwellAuthor;
+  author: InkwellAuthorSchema,
   /** Short description/prompt for the entity */
-  promptShort?: string;
-}
+  promptShort: z.string().optional(),
+});
 
 /**
- * Character entity with portrait and world assets
+ * Character entity schema
  */
-export interface InkwellCharacterEntity extends InkwellBaseEntity {
-  type: 'character';
+export const InkwellCharacterEntitySchema = InkwellBaseEntitySchema.extend({
+  type: z.literal('character'),
   /** ID of the portrait asset */
-  portraitAssetId: string;
+  portraitAssetId: z.string(),
   /** ID of the world asset (usually walking sprite sheet) */
-  worldAssetId: string;
+  worldAssetId: z.string(),
   /** Character facing direction */
-  facing: 'left' | 'right';
+  facing: z.enum(['left', 'right']),
   /** URL to portrait image */
-  portraitUrl: string;
+  portraitUrl: z.string(),
   /** URL to world sprite sheet */
-  worldUrl: string;
+  worldUrl: z.string(),
   /** URL to portrait depth map (greyscale) */
-  portraitDepthGreyUrl: string;
+  portraitDepthGreyUrl: z.string(),
   /** URL to portrait depth map (color) */
-  portraitDepthColorUrl: string;
-}
+  portraitDepthColorUrl: z.string(),
+});
 
 /**
- * Scenery entity for background elements
+ * Scenery entity schema
  */
-export interface InkwellSceneryEntity extends InkwellBaseEntity {
-  type: 'scenery';
+export const InkwellSceneryEntitySchema = InkwellBaseEntitySchema.extend({
+  type: z.literal('scenery'),
   /** ID of the opaque world asset */
-  worldAssetId?: string;
+  worldAssetId: z.string().optional(),
   /** ID of the transparent world asset */
-  worldAssetIdTransparent?: string;
+  worldAssetIdTransparent: z.string().optional(),
   /** URL to opaque world image */
-  worldUrl?: string;
+  worldUrl: z.string().optional(),
   /** URL to transparent world image (preferred for compositing) */
-  worldUrlTransparent?: string;
+  worldUrlTransparent: z.string().optional(),
   /** URL to world depth map (greyscale) */
-  worldDepthGreyUrl?: string;
+  worldDepthGreyUrl: z.string().optional(),
   /** URL to world depth map (color) */
-  worldDepthColorUrl?: string;
+  worldDepthColorUrl: z.string().optional(),
   /** Additional metadata about the scenery */
-  metadata?: {
-    scenery?: {
-      /** Width of the scenery asset */
-      width?: 64 | 128 | 256;
-      /** Height of the scenery asset */
-      height?: 64 | 128 | 256;
-    };
-  };
-}
+  metadata: z
+    .object({
+      scenery: z
+        .object({
+          /** Width of the scenery asset */
+          width: z.literal(64).or(z.literal(128)).or(z.literal(256)).optional(),
+          /** Height of the scenery asset */
+          height: z
+            .literal(64)
+            .or(z.literal(128))
+            .or(z.literal(256))
+            .optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
 
 /**
- * Item entity for collectible objects
+ * Item entity schema
  */
-export interface InkwellItemEntity extends InkwellBaseEntity {
-  type: 'item';
+export const InkwellItemEntitySchema = InkwellBaseEntitySchema.extend({
+  type: z.literal('item'),
   /** ID of the world asset */
-  worldAssetId: string;
+  worldAssetId: z.string(),
   /** URL to world image */
-  worldUrl: string;
+  worldUrl: z.string(),
   /** ID of the transparent world asset */
-  worldAssetIdTransparent: string;
+  worldAssetIdTransparent: z.string(),
   /** URL to transparent world image */
-  worldUrlTransparent: string;
+  worldUrlTransparent: z.string(),
   /** ID of the inventory asset */
-  inventoryAssetId: string;
+  inventoryAssetId: z.string(),
   /** ID of the transparent inventory asset */
-  inventoryAssetIdTransparent?: string;
+  inventoryAssetIdTransparent: z.string().optional(),
   /** URL to inventory image */
-  inventoryUrl: string;
+  inventoryUrl: z.string(),
   /** URL to transparent inventory image */
-  inventoryUrlTransparent: string;
-}
+  inventoryUrlTransparent: z.string(),
+});
 
 /**
- * Tile entity for level geometry
+ * Tile entity schema
  */
-export interface InkwellTileEntity extends InkwellBaseEntity {
-  type: 'tile';
+export const InkwellTileEntitySchema = InkwellBaseEntitySchema.extend({
+  type: z.literal('tile'),
   /** ID of the tile asset */
-  tileAssetId: string;
+  tileAssetId: z.string(),
   /** URL to tile image */
-  tileUrl: string;
-}
+  tileUrl: z.string(),
+});
 
 /**
- * Effect entity for visual effects
+ * Effect entity schema
  */
-export interface InkwellEffectEntity extends InkwellBaseEntity {
-  type: 'effect';
+export const InkwellEffectEntitySchema = InkwellBaseEntitySchema.extend({
+  type: z.literal('effect'),
   /** ID of the effect asset */
-  effectAssetId: string;
+  effectAssetId: z.string(),
   /** ID of the effect icon asset */
-  effectIconAssetId: string;
+  effectIconAssetId: z.string(),
   /** URL to effect animation/image */
-  effectUrl: string;
+  effectUrl: z.string(),
   /** URL to effect icon */
-  effectIconUrl: string;
-}
+  effectIconUrl: z.string(),
+});
 
 /**
- * Scene entity for background scenes
+ * Scene entity schema
  */
-export interface InkwellSceneEntity extends InkwellBaseEntity {
-  type: 'scene';
+export const InkwellSceneEntitySchema = InkwellBaseEntitySchema.extend({
+  type: z.literal('scene'),
   /** ID of the scene asset */
-  sceneAssetId: string;
+  sceneAssetId: z.string(),
   /** URL to scene image */
-  sceneUrl: string;
+  sceneUrl: z.string(),
   /** URL to scene depth map (greyscale) */
-  sceneDepthGreyUrl: string;
+  sceneDepthGreyUrl: z.string(),
   /** URL to scene depth map (color) */
-  sceneDepthColorUrl: string;
-}
+  sceneDepthColorUrl: z.string(),
+});
 
 /**
- * Union type of all possible Inkwell entities
+ * Union schema for all entity types
  */
-export type InkwellEntity =
-  | InkwellCharacterEntity
-  | InkwellItemEntity
-  | InkwellSceneryEntity
-  | InkwellTileEntity
-  | InkwellEffectEntity
-  | InkwellSceneEntity;
+export const InkwellEntitySchema = z.discriminatedUnion('type', [
+  InkwellCharacterEntitySchema,
+  InkwellItemEntitySchema,
+  InkwellSceneryEntitySchema,
+  InkwellTileEntitySchema,
+  InkwellEffectEntitySchema,
+  InkwellSceneEntitySchema,
+]);
 
 /**
- * Response containing embedding data for an entity
+ * Embedding response schema
  */
-export interface InkwellEmbeddingResponse {
+export const InkwellEmbeddingResponseSchema = z.object({
   /** Entity ID */
-  entityId: string;
+  entityId: z.string(),
   /** Embedding vector */
-  embedding: number[];
-}
+  embedding: z.array(z.number()),
+});
 
 /**
- * Request parameters for finding nearest entities by embedding
+ * Nearest request schema
  */
-export interface InkwellNearestRequest {
+export const InkwellNearestRequestSchema = z.object({
   /** Embedding vector to search with */
-  embedding: number[];
+  embedding: z.array(z.number()),
   /** Optional entity types to filter by */
-  types?: Array<Exclude<InkwellEntityType, never>>;
+  types: z.array(z.enum(INKWELL_ENTITY_TYPES)).optional(),
   /** Number of results to return (default: 1) */
-  top?: number;
+  top: z.number().optional(),
   /** Optional metadata filters */
-  metadata?: {
-    scenery?: {
-      /** Filter by scenery width */
-      width?: 64 | 128 | 256;
-      /** Filter by scenery height */
-      height?: 64 | 128 | 256;
-    };
-  };
-}
+  metadata: z
+    .object({
+      scenery: z
+        .object({
+          /** Filter by scenery width */
+          width: z.literal(64).or(z.literal(128)).or(z.literal(256)).optional(),
+          /** Filter by scenery height */
+          height: z
+            .literal(64)
+            .or(z.literal(128))
+            .or(z.literal(256))
+            .optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
 
 /**
- * Request parameters for finding nearest entities from entity transform
+ * Nearest from entity transform request schema
  */
-export interface InkwellNearestFromEntityTransformRequest {
+export const InkwellNearestFromEntityTransformRequestSchema = z.object({
   /** Source entity ID */
-  entityId: string;
+  entityId: z.string(),
   /** Target entity type to transform to */
-  targetType: InkwellEntityType;
+  targetType: z.enum(INKWELL_ENTITY_TYPES),
   /** Number of results to return (default: 1) */
-  count?: number;
-}
+  count: z.number().optional(),
+});
 
 /**
- * Request parameters for getting multiple entities by IDs
+ * Entities by IDs request schema
  */
-export interface InkwellEntitiesByIdsRequest {
+export const InkwellEntitiesByIdsRequestSchema = z.object({
   /** Array of entity IDs to fetch */
-  ids: string[];
-}
+  ids: z.array(z.string()),
+});
 
 /**
- * Type guard to check if an entity is a character
- * @param e - Entity to check
- * @returns True if entity is a character
+ * TypeScript types inferred from Zod schemas
+ */
+export type InkwellEntityType = z.infer<typeof InkwellBaseEntitySchema>['type'];
+export type InkwellAuthor = z.infer<typeof InkwellAuthorSchema>;
+export type InkwellBaseEntity = z.infer<typeof InkwellBaseEntitySchema>;
+export type InkwellCharacterEntity = z.infer<
+  typeof InkwellCharacterEntitySchema
+>;
+export type InkwellSceneryEntity = z.infer<typeof InkwellSceneryEntitySchema>;
+export type InkwellItemEntity = z.infer<typeof InkwellItemEntitySchema>;
+export type InkwellTileEntity = z.infer<typeof InkwellTileEntitySchema>;
+export type InkwellEffectEntity = z.infer<typeof InkwellEffectEntitySchema>;
+export type InkwellSceneEntity = z.infer<typeof InkwellSceneEntitySchema>;
+export type InkwellEntity = z.infer<typeof InkwellEntitySchema>;
+export type InkwellEmbeddingResponse = z.infer<
+  typeof InkwellEmbeddingResponseSchema
+>;
+export type InkwellNearestRequest = z.infer<typeof InkwellNearestRequestSchema>;
+export type InkwellNearestFromEntityTransformRequest = z.infer<
+  typeof InkwellNearestFromEntityTransformRequestSchema
+>;
+export type InkwellEntitiesByIdsRequest = z.infer<
+  typeof InkwellEntitiesByIdsRequestSchema
+>;
+
+/**
+ * Type guard functions
  */
 export function isCharacter(e: InkwellEntity): e is InkwellCharacterEntity {
   return e.type === 'character';
 }
 
-/**
- * Type guard to check if an entity is an effect
- * @param e - Entity to check
- * @returns True if entity is an effect
- */
 export function isEffect(e: InkwellEntity): e is InkwellEffectEntity {
   return e.type === 'effect';
 }
 
-/**
- * Type guard to check if an entity is an item
- * @param e - Entity to check
- * @returns True if entity is an item
- */
 export function isItem(e: InkwellEntity): e is InkwellItemEntity {
   return e.type === 'item';
 }
 
-/**
- * Type guard to check if an entity is scenery
- * @param e - Entity to check
- * @returns True if entity is scenery
- */
 export function isScenery(e: InkwellEntity): e is InkwellSceneryEntity {
   return e.type === 'scenery';
 }
 
-/**
- * Type guard to check if an entity is a tile
- * @param e - Entity to check
- * @returns True if entity is a tile
- */
 export function isTiles(e: InkwellEntity): e is InkwellTileEntity {
   return e.type === 'tile';
 }
 
-/**
- * Type guard to check if an entity is a scene
- * @param e - Entity to check
- * @returns True if entity is a scene
- */
 export function isScene(e: InkwellEntity): e is InkwellSceneEntity {
   return e.type === 'scene';
 }
