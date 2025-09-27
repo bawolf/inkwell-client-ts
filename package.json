@@ -20,7 +20,8 @@
         "lint:fix": "eslint src --ext .ts --fix",
         "format": "prettier --write src/**/*.ts",
         "prepublishOnly": "npm run build && npm run test",
-        "smoke": "npm run build && DEBUG=inkwell:client node scripts/smoke.mjs"
+        "smoke": "npm run build && DEBUG=inkwell:client node scripts/smoke.mjs",
+        "live-check": "npm run build && DEBUG=inkwell:client node scripts/live-check.mjs"
     },
     "publishConfig": {
         "access": "public"

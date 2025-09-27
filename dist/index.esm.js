@@ -474,12 +474,15 @@ class InkwellClient {
      * });
      * ```
      */
-    nearestFromEntityTransform(req) {
-        return this.makeRequest({
+    async nearestFromEntityTransform(req) {
+        // Canonical server shape: { items: InkwellEntity[] }
+        const ItemsSchema = z.object({ items: z.array(InkwellEntitySchema) });
+        const data = await this.makeRequest({
             method: 'POST',
             url: '/embedding/nearest-from-entity-transform',
             data: req,
-        }, z.array(InkwellEntitySchema));
+        }, ItemsSchema);
+        return data.items;
     }
     /**
      * Get multiple entities by their IDs
@@ -496,12 +499,16 @@ class InkwellClient {
      * ```
      */
     async entitiesByIds(req) {
-        // The API returns a direct array of entities, not wrapped in an object
-        return this.makeRequest({
+        // Canonical server shape: { items: InkwellEntity[] }
+        const EntitiesItemsSchema = z.object({
+            items: z.array(InkwellEntitySchema),
+        });
+        const data = await this.makeRequest({
             method: 'POST',
             url: '/entities/by-ids',
             data: req,
-        }, z.array(InkwellEntitySchema));
+        }, EntitiesItemsSchema);
+        return data.items;
     }
 }
 /**

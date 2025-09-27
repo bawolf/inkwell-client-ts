@@ -140,7 +140,7 @@ Find entities similar to a source entity but of a different type.
 const items = await client.nearestFromEntityTransform({
   entityId: 'character-123',
   targetType: 'item',
-  top: 3,
+  count: 3,
 });
 ```
 
@@ -153,6 +153,17 @@ const entities = await client.entitiesByIds({
   ids: ['entity-1', 'entity-2', 'entity-3'],
 });
 ```
+
+### Response Shapes (Canonical)
+
+- `nearestByEmbedding` returns an object payload with `matches` (API-faithful).
+- `entitiesByIds` returns an array of entities, parsed from a server object `{ items: InkwellEntity[] }`.
+- `nearestFromEntityTransform` returns an array of entities, parsed from a server object `{ items: InkwellEntity[] }`.
+
+Notes:
+
+- The server wraps some list responses in `{ items }`. The client normalizes those to plain arrays.
+- Arrays are not returned directly by the server for these endpoints; do not rely on raw array shapes.
 
 ### Type Guards
 

@@ -94,7 +94,7 @@ describe('InkwellClient', () => {
       };
 
       // Mock the axios instance's request method
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockResolvedValue(mockResponse);
 
       const result = await client.getEntity('test-entity-1');
@@ -116,9 +116,9 @@ describe('InkwellClient', () => {
       } as any;
 
       // Make axios.isAxiosError return true for this case
-      (mockedAxios.isAxiosError as jest.Mock).mockReturnValueOnce(true);
+      mockedAxios.isAxiosError.mockReturnValueOnce(true);
 
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockRejectedValue(mockError);
 
       try {
@@ -156,7 +156,7 @@ describe('InkwellClient', () => {
         statusText: 'OK',
       };
 
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockResolvedValue(mockResponse);
 
       const result = await client.getRandomEntity();
@@ -176,7 +176,7 @@ describe('InkwellClient', () => {
         statusText: 'OK',
       };
 
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockResolvedValue(mockResponse);
 
       const result = await client.getRandomEntity(['character', 'item']);
@@ -231,12 +231,34 @@ describe('InkwellClient', () => {
 
     it('should get multiple entities by IDs', async () => {
       const mockResponse = {
-        data: mockEntities,
+        data: { items: mockEntities },
         status: 200,
         statusText: 'OK',
       };
 
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
+      mockAxiosInstance.request.mockResolvedValue(mockResponse);
+
+      const result = await client.entitiesByIds({
+        ids: ['entity-1', 'entity-2'],
+      });
+
+      expect(result).toEqual(mockEntities);
+      expect(mockAxiosInstance.request).toHaveBeenCalledWith({
+        method: 'POST',
+        url: '/entities/by-ids',
+        data: { ids: ['entity-1', 'entity-2'] },
+      });
+    });
+
+    it('should handle object-shaped { items } response', async () => {
+      const mockResponse = {
+        data: { items: mockEntities },
+        status: 200,
+        statusText: 'OK',
+      };
+
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockResolvedValue(mockResponse);
 
       const result = await client.entitiesByIds({
@@ -282,7 +304,7 @@ describe('InkwellClient', () => {
         matches: [{ entityId: 'nearest-1', distance: 0.123 }],
       };
 
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockResolvedValueOnce({
         data: matchesPayload,
         status: 200,
@@ -308,18 +330,17 @@ describe('InkwellClient', () => {
         matches: [{ entityId: 'nearest-1', distance: 0.123 }],
       };
 
-      const mockAxiosInstance = mockedAxios.create();
-      mockAxiosInstance.request
-        .mockResolvedValueOnce({
-          data: matchesPayload,
-          status: 200,
-          statusText: 'OK',
-        })
-        .mockResolvedValueOnce({
-          data: mockEntities,
-          status: 200,
-          statusText: 'OK',
-        });
+      const mockAxiosInstance = mockedAxios.create() as any;
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        data: matchesPayload,
+        status: 200,
+        statusText: 'OK',
+      });
+      mockAxiosInstance.request.mockResolvedValueOnce({
+        data: { items: mockEntities },
+        status: 200,
+        statusText: 'OK',
+      });
 
       const result = await client.nearestByEmbeddingEntities({
         embedding: [0.1, 0.2, 0.3],
@@ -341,7 +362,7 @@ describe('InkwellClient', () => {
     it('nearestByEmbeddingEntities should return empty array when matches is empty', async () => {
       const matchesPayload = { matches: [] };
 
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockResolvedValueOnce({
         data: matchesPayload,
         status: 200,
@@ -380,18 +401,18 @@ describe('InkwellClient', () => {
 
     it('should find nearest entities from entity transform', async () => {
       const mockResponse = {
-        data: mockEntities,
+        data: { items: mockEntities },
         status: 200,
         statusText: 'OK',
       };
 
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockResolvedValue(mockResponse);
 
       const result = await client.nearestFromEntityTransform({
         entityId: 'source-entity',
         targetType: 'item',
-        top: 3,
+        count: 3,
       });
 
       expect(result).toEqual(mockEntities);
@@ -401,7 +422,7 @@ describe('InkwellClient', () => {
         data: {
           entityId: 'source-entity',
           targetType: 'item',
-          top: 3,
+          count: 3,
         },
       });
     });
@@ -409,7 +430,7 @@ describe('InkwellClient', () => {
 
   describe('error handling', () => {
     it('should handle network errors', async () => {
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockRejectedValue(new Error('Network error'));
 
       await expect(client.getEntity('test')).rejects.toThrow();
@@ -425,9 +446,11 @@ describe('InkwellClient', () => {
       } as any;
 
       // Make axios.isAxiosError return true for this case
-      (mockedAxios.isAxiosError as jest.Mock).mockReturnValueOnce(true);
+      (mockedAxios.isAxiosError as unknown as jest.Mock).mockReturnValueOnce(
+        true
+      );
 
-      const mockAxiosInstance = mockedAxios.create();
+      const mockAxiosInstance = mockedAxios.create() as any;
       mockAxiosInstance.request.mockRejectedValue(mockError);
 
       try {
