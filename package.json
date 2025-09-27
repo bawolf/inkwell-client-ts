@@ -1,6 +1,6 @@
 {
-    "name": "@inkwell/client",
-    "version": "1.0.1",
+    "name": "inkwell-client",
+    "version": "0.0.1",
     "description": "Official Inkwell API client for JavaScript/TypeScript",
     "type": "module",
     "main": "dist/index.js",
@@ -21,6 +21,9 @@
         "format": "prettier --write src/**/*.ts",
         "prepublishOnly": "npm run build && npm run test",
         "smoke": "npm run build && DEBUG=inkwell:client node scripts/smoke.mjs"
+    },
+    "publishConfig": {
+        "access": "public"
     },
     "keywords": [
         "inkwell",
