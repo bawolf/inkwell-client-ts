@@ -63,6 +63,8 @@ export class InkwellError extends Error {
 
 /**
  * Official Inkwell API client for JavaScript/TypeScript
+ * 
+ * Rate Limits: 120 requests per minute, 10,000 requests per day per API key
  *
  * @example
  * ```typescript
@@ -221,7 +223,19 @@ export class InkwellClient {
    * ```
    */
   getRandomEntity(types?: InkwellEntityType[]): Promise<InkwellEntity> {
-    const params = types && types.length ? { types: types.join(',') } : {};
+    // Convert entity types to plural forms as expected by the API
+    const typeMapping: Record<InkwellEntityType, string> = {
+      character: 'characters',
+      item: 'items',
+      scenery: 'scenery',
+      tile: 'tiles',
+      effect: 'effects',
+      scene: 'scenes',
+    };
+    
+    const params = types && types.length 
+      ? { types: types.map(type => typeMapping[type]).join(',') } 
+      : {};
 
     return this.makeRequest(
       {
@@ -336,15 +350,15 @@ export class InkwellClient {
   async entitiesByIds(
     req: InkwellEntitiesByIdsRequest
   ): Promise<InkwellEntity[]> {
-    const response = await this.makeRequest<{ items: InkwellEntity[] }>(
+    // The API returns a direct array of entities, not wrapped in an object
+    return this.makeRequest<InkwellEntity[]>(
       {
         method: 'POST',
         url: '/entities/by-ids',
         data: req,
       },
-      z.object({ items: z.array(InkwellEntitySchema) })
+      z.array(InkwellEntitySchema)
     );
-    return response.items;
   }
 }
 
